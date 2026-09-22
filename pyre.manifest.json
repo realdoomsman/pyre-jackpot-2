@@ -1,0 +1,16 @@
+{
+  "name": "Jackpot: The Scorekeeper",
+  "version": "0.1.0",
+  "entry": "index.html",
+  "functions": [
+    { "name": "feed", "auth": false, "holderOnly": false },
+    { "name": "commit", "auth": true, "holderOnly": false },
+    { "name": "reveal", "auth": true, "holderOnly": false },
+    { "name": "draft", "auth": true, "holderOnly": false },
+    { "name": "grade", "auth": true, "holderOnly": false },
+    { "name": "addcategory", "auth": true, "holderOnly": true }
+  ],
+  "holderTier": {
+    "minHoldTokens": 5000
+  }
+}
