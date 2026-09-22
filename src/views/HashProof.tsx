@@ -6,8 +6,6 @@ export interface HashProofProps {
   text: string;
   salt: string;
   hash: string;
-  /** Shown under the verdict: the sealed text and salt this was computed from. */
-  showPreimage?: boolean;
 }
 
 type State =
@@ -19,7 +17,7 @@ type State =
  * Re-hashes a revealed prediction in the visitor's own browser and compares the result
  * with the hash that was published at commit time. Nothing here trusts the server.
  */
-export function HashProof({ text, salt, hash, showPreimage = false }: HashProofProps) {
+export function HashProof({ text, salt, hash }: HashProofProps) {
   const [state, setState] = useState<State>({ kind: "computing" });
 
   useEffect(() => {
@@ -64,12 +62,6 @@ export function HashProof({ text, salt, hash, showPreimage = false }: HashProofP
         </p>
       ) : state.kind === "failed" ? (
         <p className="text-xs text-ink-faint">{state.message}</p>
-      ) : null}
-
-      {showPreimage ? (
-        <p className="break-all font-mono text-xs leading-relaxed text-ink-faint">
-          sha256(prediction + &quot;|&quot; + salt)
-        </p>
       ) : null}
 
       {state.kind === "done" && !matches ? (

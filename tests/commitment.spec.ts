@@ -247,6 +247,14 @@ test("bad input is rejected with a message a person can act on", async () => {
   );
   expect(asString(unknownCategory.error)).toContain("unknown category");
 
+  const tooFar = await run(
+    "commit",
+    { text: "a prediction resolving absurdly far in the future", category: "crypto", resolvesAt: Date.now() + 6 * 365 * 24 * 60 * MINUTE },
+    store,
+    OPERATOR,
+  );
+  expect(asString(tooFar.error)).toContain("within five years");
+
   const added = await run("addcategory", { name: "Elections " }, store, HOLDER);
   expect(added.added).toBe(true);
   expect(added.categories).toContain("elections");

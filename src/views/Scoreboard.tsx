@@ -32,6 +32,24 @@ function RecordBar({ record }: { record: BoardRecord }) {
   );
 }
 
+function Skeleton() {
+  return (
+    <div aria-hidden className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div className="rounded-card border border-border bg-surface p-4" key={i}>
+            <div className="h-3 w-16 animate-pulse rounded-card bg-surface-raised" />
+            <div className="mt-3 h-8 w-10 animate-pulse rounded-card bg-surface-raised" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-card border border-border bg-surface p-5">
+        <div className="h-2 w-full animate-pulse rounded-card bg-surface-raised" />
+      </div>
+    </div>
+  );
+}
+
 function Legend() {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
@@ -54,9 +72,12 @@ export function Scoreboard({ board }: ScoreboardProps) {
 
   if (board.status === "loading") {
     return (
-      <p aria-live="polite" className="text-sm text-ink-muted">
-        loading the record…
-      </p>
+      <div className="flex flex-col gap-5">
+        <p aria-live="polite" className="text-sm text-ink-muted">
+          loading the record…
+        </p>
+        <Skeleton />
+      </div>
     );
   }
   if (board.status === "error" || !stats) {

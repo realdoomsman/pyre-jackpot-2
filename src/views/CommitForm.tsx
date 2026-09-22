@@ -6,6 +6,7 @@ import type { CommitResult } from "../lib/types";
 
 const MAX_TEXT = 280;
 const WEEK = 7 * 24 * 60 * 60 * 1000;
+const FIVE_YEARS = 5 * 365 * 24 * 60 * 60 * 1000;
 
 export interface CommitFormProps {
   categories: string[];
@@ -33,6 +34,10 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
     const resolvesAt = new Date(when).getTime();
     if (!Number.isFinite(resolvesAt)) {
       setError("pick a resolution date");
+      return;
+    }
+    if (resolvesAt > Date.now() + skew + FIVE_YEARS) {
+      setError("the resolution date has to be within five years");
       return;
     }
     setBusy(true);
@@ -115,16 +120,27 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
           value={text}
         />
         <div className="flex flex-col gap-4 sm:flex-row">
-          <Select className="sm:w-48" label="category" onChange={(e) => setCategory(e.target.value)} value={category}>
-            {categories.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
+          <Select
+            className="sm:w-48"
+            disabled={categories.length === 0}
+            label="category"
+            onChange={(e) => setCategory(e.target.value)}
+            value={categories.length === 0 ? "" : category}
+          >
+            {categories.length === 0 ? (
+              <option value="">loading…</option>
+            ) : (
+              categories.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))
+            )}
           </Select>
           <Input
             className="flex-1"
             label="resolution date"
+            max={toDateTimeLocal(Date.now() + skew + FIVE_YEARS)}
             min={toDateTimeLocal(Date.now() + skew + 60_000)}
             onChange={(e) => setWhen(e.target.value)}
             type="datetime-local"
@@ -132,7 +148,7 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={busy || over || text.trim().length < 12} type="submit">
+          <Button disabled={busy || over || categories.length === 0 || text.trim().length < 12} type="submit">
             {busy ? "sealing…" : "seal and commit"}
           </Button>
           <span className="text-xs text-ink-faint">a 128-bit salt is generated server-side and kept sealed</span>
