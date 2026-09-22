@@ -24,7 +24,7 @@ export function Console({ board }: ConsoleProps) {
           <p className="text-sm text-ink-muted">
             {claimed
               ? "this board already has a scorekeeper. sign in as that account to commit or reveal."
-              : "the first account to commit becomes this board's scorekeeper. everything below is refused until you sign in."}
+              : "the first account to commit publicly becomes this board's scorekeeper. everything below is refused until you sign in."}
           </p>
           <div className="mt-4">
             <LoginButton className="inline-flex h-10 items-center rounded-card bg-violet px-4 text-sm font-medium text-bg hover:bg-violet-hover">

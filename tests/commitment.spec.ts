@@ -132,6 +132,37 @@ test("only the scorekeeper commits publicly; other callers are refused", async (
   expect(asString(notHolder.error)).toContain("holder perk");
 });
 
+test("a holder sealing a private call first does not claim the operator seat", async () => {
+  const store = new Map<string, unknown>();
+  // A holder seals a private call before anyone has committed publicly.
+  await run(
+    "commit",
+    { text: "a holder seals a private call before any public commit exists", category: "crypto", resolvesAt: Date.now() + 5 * MINUTE, visibility: "private" },
+    store,
+    HOLDER,
+  );
+  expect(store.get("operator")).toBeUndefined();
+
+  // The intended operator can still claim the public board afterwards.
+  const claimed = await run(
+    "commit",
+    { text: "the intended operator claims the public board afterwards", category: "crypto", resolvesAt: Date.now() + 5 * MINUTE },
+    store,
+    OPERATOR,
+  );
+  expect(claimed.error).toBeUndefined();
+  expect(record(store.get("operator") as Record<string, unknown>).id).toBe(OPERATOR.id);
+
+  // The holder cannot now also claim the public board.
+  const refused = await run(
+    "commit",
+    { text: "the holder tries to also post to the public board", category: "crypto", resolvesAt: Date.now() + 5 * MINUTE },
+    store,
+    HOLDER,
+  );
+  expect(asString(refused.error)).toContain("only the scorekeeper");
+});
+
 test("a holder's private commit is sealed from everyone else, then joins the board on reveal", async () => {
   const store = new Map<string, unknown>();
   const text = "the next cycle's top culture story comes from a game, not a film";

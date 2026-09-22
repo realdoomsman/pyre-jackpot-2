@@ -162,13 +162,16 @@ export default async function handler(input, ship) {
     ship.kv.get("categories"),
   ]);
 
+  // Only a *public* commit claims the operator seat — a holder sealing a private call
+  // first must never accidentally lock out whoever was meant to run the public board.
   let operator = operatorRaw && typeof operatorRaw.id === "string" ? operatorRaw : null;
-  if (!operator) {
-    operator = { id: uid, claimedAt: now };
-    await ship.kv.set("operator", operator);
-  }
-  if (!hidden && operator.id !== uid) {
-    return { error: "only the scorekeeper commits to the public feed; holders can seal private calls" };
+  if (!hidden) {
+    if (!operator) {
+      operator = { id: uid, claimedAt: now };
+      await ship.kv.set("operator", operator);
+    } else if (operator.id !== uid) {
+      return { error: "only the scorekeeper commits to the public feed; holders can seal private calls" };
+    }
   }
 
   const categories = Array.isArray(categoriesRaw) ? categoriesRaw : DEFAULT_CATEGORIES;
@@ -204,6 +207,6 @@ export default async function handler(input, ship) {
     entry: { ...entry, mine: true },
     hash,
     committedAt: now,
-    operatorClaimed: operator.id === uid,
+    operatorClaimed: operator !== null && operator.id === uid,
   };
 }
