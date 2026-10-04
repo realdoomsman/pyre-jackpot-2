@@ -50,6 +50,26 @@ test("committing a prediction publishes a hash and nothing else", async ({ page 
   await expect(page.getByText(prediction)).toHaveCount(0);
 });
 
+test("the character counter and submit guard match the server's whitespace-collapsing rule", async ({ page }) => {
+  // Lots of internal whitespace inflates the raw character count well past the 280 limit,
+  // but `functions/commit.js` collapses runs of whitespace before counting — the form has
+  // to agree, or a prediction the server would accept gets blocked by a false "too long".
+  const words = Array.from({ length: 40 }, (_, i) => `word${i}`);
+  const raw = words.join("     "); // five spaces between words
+  const normalized = words.join(" ");
+  expect(raw.length).toBeGreaterThan(280);
+  expect(normalized.length).toBeLessThan(280);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "scorekeeper" }).click();
+  await page.getByLabel("prediction", { exact: true }).fill(raw);
+
+  await expect(page.getByText(`${normalized.length}/280 characters`)).toBeVisible();
+  await page.getByLabel("category").selectOption("crypto");
+  await page.getByRole("button", { name: "seal and commit" }).click();
+  await expect(page.getByTestId("commit-result")).toBeVisible();
+});
+
 test("the verifier confirms a matching text and salt, and rejects a tampered one", async ({ page }) => {
   const text = "bitcoin closes above one hundred thousand dollars";
   const salt = "0a1b2c3d4e5f60718293a4b5c6d7e8f9";

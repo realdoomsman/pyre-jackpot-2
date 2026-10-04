@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Card, Chip, Input, Select, Textarea } from "../components";
 import { call, describeError } from "../lib/api";
 import { formatStamp, toDateTimeLocal } from "../lib/format";
+import { normalizePrediction } from "../lib/hash";
 import type { CommitResult } from "../lib/types";
 
 const MAX_TEXT = 280;
@@ -68,7 +69,11 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
     }
   };
 
-  const over = text.length > MAX_TEXT;
+  // `functions/commit.js` trims and collapses whitespace before counting — match that
+  // here so the counter and the submit guard agree with what the server will accept.
+  const normalizedLength = normalizePrediction(text).length;
+  const over = normalizedLength > MAX_TEXT;
+  const tooShort = normalizedLength < 12;
 
   return (
     <Card
@@ -111,8 +116,8 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
         }}
       >
         <Textarea
-          error={over ? `${text.length} characters — the limit is ${MAX_TEXT}` : undefined}
-          hint={over ? undefined : `${text.length}/${MAX_TEXT} characters, falsifiable and specific`}
+          error={over ? `${normalizedLength} characters — the limit is ${MAX_TEXT}` : undefined}
+          hint={over ? undefined : `${normalizedLength}/${MAX_TEXT} characters, falsifiable and specific`}
           label="prediction"
           onChange={(e) => setText(e.target.value)}
           placeholder="by the resolution date, …"
@@ -148,7 +153,7 @@ export function CommitForm({ categories, visibility, skew, onCommitted, allowDra
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={busy || over || categories.length === 0 || text.trim().length < 12} type="submit">
+          <Button disabled={busy || over || tooShort || categories.length === 0} type="submit">
             {busy ? "sealing…" : "seal and commit"}
           </Button>
           <span className="text-xs text-ink-faint">a 128-bit salt is generated server-side and kept sealed</span>

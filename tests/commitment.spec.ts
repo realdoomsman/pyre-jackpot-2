@@ -30,7 +30,7 @@ async function load(name: string): Promise<Handler> {
   return handler as Handler;
 }
 
-function shipFor(store: Map<string, unknown>, caller: Caller): unknown {
+function shipFor(store: Map<string, unknown>, caller: Caller, llm?: (prompt: string) => Promise<string> | string): unknown {
   return {
     user: { id: caller.id, wallet: null, isHolder: caller.isHolder },
     kv: {
@@ -42,12 +42,19 @@ function shipFor(store: Map<string, unknown>, caller: Caller): unknown {
         store.delete(key);
       },
     },
+    llm: llm ?? (async () => { throw new Error("no model stub configured for this test"); }),
   };
 }
 
-async function run(name: string, input: unknown, store: Map<string, unknown>, caller: Caller): Promise<Record<string, unknown>> {
+async function run(
+  name: string,
+  input: unknown,
+  store: Map<string, unknown>,
+  caller: Caller,
+  llm?: (prompt: string) => Promise<string> | string,
+): Promise<Record<string, unknown>> {
   const handler = await load(name);
-  const result = await handler(input, shipFor(store, caller));
+  const result = await handler(input, shipFor(store, caller, llm));
   if (result === null || typeof result !== "object") throw new Error(`functions/${name}.js returned a non-object`);
   return result as Record<string, unknown>;
 }
@@ -258,4 +265,100 @@ test("bad input is rejected with a message a person can act on", async () => {
   const added = await run("addcategory", { name: "Elections " }, store, HOLDER);
   expect(added.added).toBe(true);
   expect(added.categories).toContain("elections");
+});
+
+test("only the operator or the author can reveal a public commit, once it is due", async () => {
+  const store = new Map<string, unknown>();
+  const committed = await run(
+    "commit",
+    { text: "a public call only the operator or author may reveal", category: "crypto", resolvesAt: Date.now() + MINUTE },
+    store,
+    OPERATOR,
+  );
+  const id = asString(record(committed.entry).id);
+
+  // Not due yet: even the operator is refused.
+  const early = await run("reveal", { id, outcome: "win", explanation: "too soon" }, store, OPERATOR);
+  expect(asString(early.error)).toContain("before its resolution date");
+
+  // Once due, a stranger (neither the operator nor the author) is refused regardless of timing.
+  const laterStore = new Map<string, unknown>();
+  const dueSoon = await run(
+    "commit",
+    { text: "a public call that becomes due almost immediately", category: "crypto", resolvesAt: Date.now() + MINUTE },
+    laterStore,
+    OPERATOR,
+  );
+  const dueId = asString(record(dueSoon.entry).id);
+  // Force the commit past its resolution date without waiting in real time.
+  const board = (laterStore.get("board") as Record<string, unknown>[]).map((e) =>
+    e.id === dueId ? { ...e, resolvesAt: Date.now() - MINUTE } : e,
+  );
+  laterStore.set("board", board);
+
+  const refused = await run("reveal", { id: dueId, outcome: "win", explanation: "a stranger tries to reveal" }, laterStore, VISITOR);
+  expect(asString(refused.error)).toContain("only the author of a commit can reveal it");
+
+  const ok = await run("reveal", { id: dueId, outcome: "win", explanation: "the operator reveals it instead" }, laterStore, OPERATOR);
+  expect(ok.error).toBeUndefined();
+});
+
+test("addcategory refuses a duplicate and refuses past the category cap", async () => {
+  const store = new Map<string, unknown>();
+  const first = await run("addcategory", { name: "elections" }, store, HOLDER);
+  expect(first.added).toBe(true);
+
+  const duplicate = await run("addcategory", { name: "Elections" }, store, HOLDER);
+  expect(duplicate.added).toBe(false);
+  expect(duplicate.error).toBeUndefined();
+
+  const bad = await run("addcategory", { name: "x" }, store, HOLDER);
+  expect(asString(bad.error)).toContain("2–24 characters");
+
+  // Fill the board up to the cap (5 defaults already present), then confirm the next one is refused.
+  for (let i = 0; store.get("categories") instanceof Array && (store.get("categories") as unknown[]).length < 24; i += 1) {
+    await run("addcategory", { name: `extra category ${i}` }, store, HOLDER);
+  }
+  const overCap = await run("addcategory", { name: "one too many" }, store, HOLDER);
+  expect(asString(overCap.error)).toContain("maximum number of categories");
+});
+
+test("draft asks the model for one prediction; grade asks it to score the author's own sealed call", async () => {
+  const store = new Map<string, unknown>();
+
+  const drafted = await run(
+    "draft",
+    { niche: "l2 fee markets", category: "crypto", horizonDays: 14 },
+    store,
+    OPERATOR,
+    async (prompt) => {
+      expect(prompt).toContain("l2 fee markets");
+      return `  "base fees stay under 2 gwei for two weeks"  `;
+    },
+  );
+  expect(drafted.error).toBeUndefined();
+  expect(asString(drafted.text)).toBe("base fees stay under 2 gwei for two weeks");
+
+  const committed = await run(
+    "commit",
+    { text: asString(drafted.text), category: "crypto", resolvesAt: Date.now() + MINUTE, visibility: "private" },
+    store,
+    HOLDER,
+  );
+  const id = asString(record(committed.entry).id);
+
+  const graded = await run(
+    "grade",
+    { id, note: "base fees held at 1.8 gwei the whole time" },
+    store,
+    HOLDER,
+    async () => "WIN | base fees never crossed 2 gwei during the window",
+  );
+  expect(graded.error).toBeUndefined();
+  expect(graded.outcome).toBe("win");
+  expect(asString(graded.explanation)).toContain("never crossed");
+
+  // Grading only ever returns a suggestion — the board is untouched until `reveal` runs.
+  const feed = await run("feed", {}, store, HOLDER);
+  expect((feed.items as Record<string, unknown>[])[0]?.status).toBe("pending");
 });
